@@ -4,6 +4,8 @@ import asyncHandler from "express-async-handler";
 import userModel from "../models/userModel.js";
 import driverModel from "../models/driverModel.js";
 import Payment from "../models/paymentModel.js";
+import razorpay from "../config/razorpayConfig.js";
+import crypto from "crypto";
 
 const createRideByUser = asyncHandler(async (req, res) => {
   const {
@@ -60,7 +62,7 @@ const createRideByUser = asyncHandler(async (req, res) => {
   await newRide.save();
   return res
     .status(200)
-    .json({ message: "Ride is added to the Portal.", success: false });
+    .json({ message: "Ride is added to the Portal.", success: true });
 });
 
 const driverAmountSent = asyncHandler(async (req, res) => {
@@ -89,8 +91,8 @@ const driverAmountSent = asyncHandler(async (req, res) => {
 });
 
 const userAmountApproved = asyncHandler(async (req, res) => {
-  const { rideId, amount } = req.body;
-  if (!rideId || !amount)
+  const { rideId } = req.body;
+  if (!rideId)
     return res.status(400).json({
       message: "Provide Complete Data.",
       success: false,
@@ -260,19 +262,21 @@ const verifyStartOTP = asyncHandler(async (req, res) => {
       message: "No such ride exists.",
       success: false,
     });
-  if (ride.startOTP !== startOTP)
-    return res.status(400).json({
-      message: "wrong OTP",
-      success: false,
+
+  if (ride.startOTP == startOTP) {
+    await rideModel.findByIdAndUpdate(
+      rideId,
+      { status: "Initiated" },
+      { new: true }
+    );
+    return res.status(200).json({
+      message: "Ride Initiated Successfully.",
+      success: true,
     });
-  await rideModel.findByIdAndUpdate(
-    rideId,
-    { status: "Initiated" },
-    { new: true }
-  );
-  return res.status(200).json({
-    message: "Ride Initiated Successfully.",
-    success: true,
+  }
+  return res.status(400).json({
+    message: "Wrong OTP.",
+    success: false,
   });
 });
 
@@ -320,7 +324,7 @@ const verifyEndOTP = asyncHandler(async (req, res) => {
       message: "No such ride exists.",
       success: false,
     });
-  if (ride.endOTP !== endOTP)
+  if (ride.endOTP != endOTP)
     return res.status(400).json({
       message: "wrong OTP",
       success: false,
@@ -343,7 +347,9 @@ const userRideList = asyncHandler(async (req, res) => {
       message: "Provide Complete Data.",
       success: false,
     });
-  const rideList = await rideModel.find({ user: userId });
+  const rideList = await rideModel
+    .find({ user: userId })
+    .populate({ path: "driver", select: "name" });
   if (rideList.length === 0)
     return res.status(400).json({
       message: "Provide Complete Data.",
@@ -352,7 +358,7 @@ const userRideList = asyncHandler(async (req, res) => {
   return res.status(200).json({
     message: "Ride List sent successfully.",
     success: true,
-    data: rideList,
+    data: rideList.reverse(),
   });
 });
 
@@ -363,7 +369,12 @@ const driverRideList = asyncHandler(async (req, res) => {
       message: "Provide Complete Data.",
       success: false,
     });
-  const rideList = await rideModel.find({ driver: driverId });
+  const rideList = await rideModel
+    .find({ driver: driverId })
+    .select(
+      "user currentCity currentLocation destinationLocation date time status"
+    )
+    .populate({ path: "user", select: "name email phone active" });
   if (rideList.length === 0)
     return res.status(400).json({
       message: "Provide Complete Data.",
@@ -372,7 +383,7 @@ const driverRideList = asyncHandler(async (req, res) => {
   return res.status(200).json({
     message: "Ride List sent successfully.",
     success: true,
-    data: rideList,
+    data: rideList.reverse(),
   });
 });
 
@@ -448,20 +459,18 @@ const verifySignature = async (req, res) => {
   hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
   const generatedSignature = hmac.digest("hex");
   if (generatedSignature === razorpay_signature) {
-    await Payment.findOneAndUpdate(
+    const p = await Payment.findOneAndUpdate(
       { razorpayOrderId: razorpay_order_id },
       {
         paymentStatus: "Fully Paid",
         razorpaySignature: razorpay_signature,
         razorpayPaymentId: razorpay_payment_id,
-        paymentDate: Date.now(),
       },
       { new: true }
     );
-
     await rideModel.findOneAndUpdate(
-      { payment: razorpay_order_id },
-      { status: "Completed" },
+      { payment: p._id },
+      { status: "Payment Done" },
       { new: true }
     );
     return res.status(200).json({ success: true });

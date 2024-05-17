@@ -70,14 +70,12 @@ const driverLogin = asyncHandler(async (req, res) => {
   const token = jwt.sign({ id: driver._id }, process.env.JWT_SECRET, {
     expiresIn: "1d",
   });
-  return res
-    .status(200)
-    .json({
-      message: "Login Success",
-      success: true,
-      token,
-      data: { id: driver._id },
-    });
+  return res.status(200).json({
+    message: "Login Success",
+    success: true,
+    token,
+    data: { id: driver._id },
+  });
 });
 
 const getAllDrivers = asyncHandler(async (req, res) => {
@@ -127,12 +125,12 @@ const updateDriverProfile = asyncHandler(async (req, res) => {
 });
 
 const driverLogout = asyncHandler(async (req, res) => {
-  const driverId = req.params.driverId;
+  const { driverId } = req.body;
   if (!driverId) return res.status(400).json({ message: "Provide driver Id" });
 
   await driverModel.findByIdAndUpdate(
     driverId,
-    { online: false },
+    { active: false },
     { new: true }
   );
   return res.status(200).json({ message: "Logged Out successfully." });

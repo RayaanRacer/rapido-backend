@@ -4,7 +4,7 @@ const rideSchema = new mongoose.Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "users",
+      ref: "user",
       require: true,
     },
     driver: {
@@ -32,9 +32,8 @@ const rideSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    day: {
+    date: {
       type: String,
-      required: true,
     },
     time: {
       type: String,
@@ -50,6 +49,7 @@ const rideSchema = new mongoose.Schema(
         "Amount Approved",
         "Cancelled",
         "Initiated",
+        "Payment Done",
       ],
       default: "Pending",
     },
